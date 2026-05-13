@@ -72,13 +72,6 @@ with st.sidebar:
     st.divider()
     st.caption(f"Responses: {st.session_state.turn_count} / {turn_limit()}")
 
-    if st.button("Clear Session", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.pending_protocol = None
-        st.session_state.turn_count = 0
-        st.session_state.used_codes = set()
-        st.rerun()
-
     # ── Unlock more turns ────────────────────────────────────────────────────
     st.divider()
     with st.expander("Need more turns?"):
