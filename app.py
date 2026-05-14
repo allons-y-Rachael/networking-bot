@@ -13,7 +13,11 @@ SYSTEM = [{"type": "text", "text": SYSTEM_INSTRUCTIONS, "cache_control": {"type"
 MAX_TURNS = 20
 EXTRA_TURNS = 50
 
-cookie = CookieController()
+@st.cache_resource
+def get_cookie_controller():
+    return CookieController()
+
+cookie = get_cookie_controller()
 
 # ── Two-pass cookie load ───────────────────────────────────────────────────────
 # cookies need one JS round-trip to initialize. On first render cookie.get()
