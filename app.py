@@ -13,18 +13,10 @@ SYSTEM = [{"type": "text", "text": SYSTEM_INSTRUCTIONS, "cache_control": {"type"
 MAX_TURNS = 20
 EXTRA_TURNS = 50
 
-@st.cache_resource
-def get_cookie_controller():
-    return CookieController()
+# One instance per session — no @st.cache_resource (that shares across users and
+# prevents session_state from receiving the updated component value on rerun).
+cookie = CookieController()
 
-cookie = get_cookie_controller()
-
-# ── Two-pass cookie load ───────────────────────────────────────────────────────
-# cookies need one JS round-trip to initialize. On first render cookie.get()
-# returns None even if a cookie exists. We set defaults, rerun immediately,
-# and on the second render the real values come back.
-if "cookies_loaded" not in st.session_state:
-    st.session_state.cookies_loaded = False
 
 def safe_get(key):
     try:
@@ -32,27 +24,35 @@ def safe_get(key):
     except Exception:
         return None
 
+
 def safe_set(key, value):
     try:
         cookie.set(key, value)
     except Exception:
         pass
 
-if not st.session_state.cookies_loaded:
+
+# ── Cookie load ───────────────────────────────────────────────────────────────
+# The CookieController component needs one browser round-trip before its values
+# are available. On the very first render the component returns {} (the default).
+# The browser JS then fires, sets session_state['cookies'] to the real values,
+# and triggers a natural Streamlit rerun — at which point safe_get returns the
+# correct value. We must NOT call st.rerun() ourselves; that races ahead of the
+# browser and locks in the empty default.
+if not st.session_state.get("cookies_loaded"):
     stored_count = safe_get("turn_count")
     if stored_count is not None:
-        # Cookies are ready — load real values
+        # Browser data has arrived — load real values.
         st.session_state.turn_count = int(stored_count)
         stored_codes = safe_get("used_codes") or ""
         st.session_state.used_codes = set(stored_codes.split(",")) if stored_codes else set()
         st.session_state.cookies_loaded = True
     elif "turn_count" not in st.session_state:
-        # First pass — JS not ready yet. Set defaults and rerun to get real values.
+        # First render — set defaults and wait for the natural browser rerun.
         st.session_state.turn_count = 0
         st.session_state.used_codes = set()
-        st.rerun()
     else:
-        # Second pass — cookies still None, meaning this is a brand new user.
+        # Natural rerun fired but still no cookie — brand new user.
         st.session_state.cookies_loaded = True
 
 if "messages" not in st.session_state:
@@ -124,7 +124,7 @@ with st.sidebar:
             if not entered:
                 st.error("Enter a code first.")
             elif entered in st.session_state.used_codes:
-                st.error("Code already used this session.")
+                st.error("Code already used.")
             elif entered in valid_codes:
                 st.session_state.used_codes.add(entered)
                 safe_set("used_codes", ",".join(st.session_state.used_codes))
@@ -150,7 +150,7 @@ if prompt:
     if st.session_state.turn_count >= turn_limit():
         st.warning(
             f"Session limit reached ({turn_limit()} responses). "
-            "Unlock more turns in the sidebar or clear your session."
+            "Unlock more turns in the sidebar."
         )
     else:
         st.session_state.turn_count += 1
