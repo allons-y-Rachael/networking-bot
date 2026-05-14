@@ -1,3 +1,4 @@
 streamlit
 anthropic
 python-dotenv
+streamlit-cookies-controller
