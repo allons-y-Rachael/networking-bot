@@ -1,5 +1,6 @@
 import streamlit as st
 import anthropic
+from streamlit_cookies_controller import CookieController
 from prompts import SYSTEM_INSTRUCTIONS
 
 st.set_page_config(page_title="Social Protocol Debugger", layout="centered")
@@ -12,19 +13,36 @@ SYSTEM = [{"type": "text", "text": SYSTEM_INSTRUCTIONS, "cache_control": {"type"
 MAX_TURNS = 20
 EXTRA_TURNS = 50
 
-# ── Seed session state from URL query params (persists across refreshes) ──────
+cookie = CookieController()
+
+# ── Two-pass cookie load ───────────────────────────────────────────────────────
+# cookies need one JS round-trip to initialize. On first render cookie.get()
+# returns None even if a cookie exists. We set defaults, rerun immediately,
+# and on the second render the real values come back.
+if "cookies_loaded" not in st.session_state:
+    st.session_state.cookies_loaded = False
+
+if not st.session_state.cookies_loaded:
+    stored_count = cookie.get("turn_count")
+    if stored_count is not None:
+        # Cookies are ready — load real values
+        st.session_state.turn_count = int(stored_count)
+        stored_codes = cookie.get("used_codes") or ""
+        st.session_state.used_codes = set(stored_codes.split(",")) if stored_codes else set()
+        st.session_state.cookies_loaded = True
+    elif "turn_count" not in st.session_state:
+        # First pass — JS not ready yet. Set defaults and rerun to get real values.
+        st.session_state.turn_count = 0
+        st.session_state.used_codes = set()
+        st.rerun()
+    else:
+        # Second pass — cookies still None, meaning this is a brand new user.
+        st.session_state.cookies_loaded = True
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "pending_protocol" not in st.session_state:
     st.session_state.pending_protocol = None
-if "turn_count" not in st.session_state:
-    try:
-        st.session_state.turn_count = int(st.query_params.get("tc", 0))
-    except (ValueError, TypeError):
-        st.session_state.turn_count = 0
-if "used_codes" not in st.session_state:
-    raw = st.query_params.get("uc", "")
-    st.session_state.used_codes = set(raw.split(",")) if raw else set()
 
 
 def stream_response(messages):
@@ -93,7 +111,7 @@ with st.sidebar:
                 st.error("Code already used this session.")
             elif entered in valid_codes:
                 st.session_state.used_codes.add(entered)
-                st.query_params["uc"] = ",".join(st.session_state.used_codes)
+                cookie.set("used_codes", ",".join(st.session_state.used_codes))
                 st.success(f"+{EXTRA_TURNS} turns unlocked.")
                 st.rerun()
             else:
@@ -120,7 +138,7 @@ if prompt:
         )
     else:
         st.session_state.turn_count += 1
-        st.query_params["tc"] = str(st.session_state.turn_count)
+        cookie.set("turn_count", str(st.session_state.turn_count))
         st.session_state.messages.append({"role": "user", "content": prompt})
         if user_input:
             with st.chat_message("user"):
