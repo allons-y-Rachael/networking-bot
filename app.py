@@ -32,6 +32,12 @@ def safe_get(key):
     except Exception:
         return None
 
+def safe_set(key, value):
+    try:
+        cookie.set(key, value)
+    except Exception:
+        pass
+
 if not st.session_state.cookies_loaded:
     stored_count = safe_get("turn_count")
     if stored_count is not None:
@@ -121,7 +127,7 @@ with st.sidebar:
                 st.error("Code already used this session.")
             elif entered in valid_codes:
                 st.session_state.used_codes.add(entered)
-                cookie.set("used_codes", ",".join(st.session_state.used_codes))
+                safe_set("used_codes", ",".join(st.session_state.used_codes))
                 st.success(f"+{EXTRA_TURNS} turns unlocked.")
                 st.rerun()
             else:
@@ -148,7 +154,7 @@ if prompt:
         )
     else:
         st.session_state.turn_count += 1
-        cookie.set("turn_count", str(st.session_state.turn_count))
+        safe_set("turn_count", str(st.session_state.turn_count))
         st.session_state.messages.append({"role": "user", "content": prompt})
         if user_input:
             with st.chat_message("user"):
