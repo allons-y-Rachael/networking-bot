@@ -22,12 +22,18 @@ cookie = CookieController()
 if "cookies_loaded" not in st.session_state:
     st.session_state.cookies_loaded = False
 
+def safe_get(key):
+    try:
+        return cookie.get(key)
+    except Exception:
+        return None
+
 if not st.session_state.cookies_loaded:
-    stored_count = cookie.get("turn_count")
+    stored_count = safe_get("turn_count")
     if stored_count is not None:
         # Cookies are ready — load real values
         st.session_state.turn_count = int(stored_count)
-        stored_codes = cookie.get("used_codes") or ""
+        stored_codes = safe_get("used_codes") or ""
         st.session_state.used_codes = set(stored_codes.split(",")) if stored_codes else set()
         st.session_state.cookies_loaded = True
     elif "turn_count" not in st.session_state:
