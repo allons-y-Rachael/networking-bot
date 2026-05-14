@@ -1,6 +1,5 @@
 import streamlit as st
 import anthropic
-from streamlit_cookies_controller import CookieController
 from prompts import SYSTEM_INSTRUCTIONS
 
 st.set_page_config(page_title="Social Protocol Debugger", layout="centered")
@@ -13,19 +12,19 @@ SYSTEM = [{"type": "text", "text": SYSTEM_INSTRUCTIONS, "cache_control": {"type"
 MAX_TURNS = 20
 EXTRA_TURNS = 50
 
-cookie = CookieController()
-
-# ── Seed session state from cookies on first load ─────────────────────────────
+# ── Seed session state from URL query params (persists across refreshes) ──────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "pending_protocol" not in st.session_state:
     st.session_state.pending_protocol = None
 if "turn_count" not in st.session_state:
-    stored = cookie.get("turn_count")
-    st.session_state.turn_count = int(stored) if stored else 0
+    try:
+        st.session_state.turn_count = int(st.query_params.get("tc", 0))
+    except (ValueError, TypeError):
+        st.session_state.turn_count = 0
 if "used_codes" not in st.session_state:
-    stored = cookie.get("used_codes")
-    st.session_state.used_codes = set(stored.split(",")) if stored else set()
+    raw = st.query_params.get("uc", "")
+    st.session_state.used_codes = set(raw.split(",")) if raw else set()
 
 
 def stream_response(messages):
@@ -94,7 +93,7 @@ with st.sidebar:
                 st.error("Code already used this session.")
             elif entered in valid_codes:
                 st.session_state.used_codes.add(entered)
-                cookie.set("used_codes", ",".join(st.session_state.used_codes))
+                st.query_params["uc"] = ",".join(st.session_state.used_codes)
                 st.success(f"+{EXTRA_TURNS} turns unlocked.")
                 st.rerun()
             else:
@@ -121,7 +120,7 @@ if prompt:
         )
     else:
         st.session_state.turn_count += 1
-        cookie.set("turn_count", str(st.session_state.turn_count))
+        st.query_params["tc"] = str(st.session_state.turn_count)
         st.session_state.messages.append({"role": "user", "content": prompt})
         if user_input:
             with st.chat_message("user"):
